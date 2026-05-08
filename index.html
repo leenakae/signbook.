@@ -451,18 +451,37 @@
   const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx-3eyIGeFXdsuO1dLGACXknO3bDStAfbQVt_Ua4diQAT7DDAKmi-NTEx_AUmJu0nnC/exec';
   // =========================================================
 
-  async function loadEntries() {
-    try {
-      const res = await fetch(APPS_SCRIPT_URL);
-      const data = await res.json();
-      renderEntries(data.entries || []);
-    } catch(e) {
+  // โหลดรายชื่อด้วย JSONP เพื่อหลีกเลี่ยง CORS
+  function loadEntries() {
+    const old = document.getElementById('jsonp-script');
+    if (old) old.remove();
+    const script = document.createElement('script');
+    script.id = 'jsonp-script';
+    script.src = APPS_SCRIPT_URL + '?callback=jsonpCallback&t=' + Date.now();
+    script.onerror = function() {
       document.getElementById('entries-list').innerHTML =
         '<div class="loading-indicator">ไม่สามารถโหลดรายชื่อได้ — กรุณาตรวจสอบ APPS_SCRIPT_URL</div>';
-    }
+    };
+    document.body.appendChild(script);
   }
 
-  async function handleSubmit() {
+  function jsonpCallback(data) {
+    renderEntries(data.entries || []);
+  }
+
+  function submitCallback(data) {
+    const btn = document.getElementById('submit-btn');
+    document.getElementById('f-name').value     = '';
+    document.getElementById('f-position').value = '';
+    document.getElementById('f-dept').value     = '';
+    document.getElementById('f-msg').value      = '';
+    btn.disabled = false;
+    btn.textContent = '✦ ลงนามถวายพระพร ✦';
+    showToast();
+    setTimeout(loadEntries, 1200);
+  }
+
+  function handleSubmit() {
     const name     = document.getElementById('f-name').value.trim();
     const position = document.getElementById('f-position').value.trim();
     const dept     = document.getElementById('f-dept').value.trim();
@@ -475,31 +494,19 @@
     btn.disabled = true;
     btn.textContent = '⏳ กำลังบันทึก...';
 
-    try {
-      await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify({ name, position, dept, msg }),
-        // ใช้ text/plain เพื่อหลีกเลี่ยง CORS preflight
-        headers: { 'Content-Type': 'text/plain' }
-      });
-    } catch(e) {
+    // ส่งข้อมูลผ่าน JSONP (GET) เพื่อหลีกเลี่ยง CORS
+    const old = document.getElementById('jsonp-submit');
+    if (old) old.remove();
+    const params = new URLSearchParams({ action:'add', name, position, dept, msg, callback:'submitCallback', t: Date.now() });
+    const script = document.createElement('script');
+    script.id = 'jsonp-submit';
+    script.src = APPS_SCRIPT_URL + '?' + params.toString();
+    script.onerror = function() {
       alert('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง');
       btn.disabled = false;
       btn.textContent = '✦ ลงนามถวายพระพร ✦';
-      return;
-    }
-
-    document.getElementById('f-name').value     = '';
-    document.getElementById('f-position').value = '';
-    document.getElementById('f-dept').value     = '';
-    document.getElementById('f-msg').value      = '';
-
-    btn.disabled = false;
-    btn.textContent = '✦ ลงนามถวายพระพร ✦';
-
-    showToast();
-    // โหลดรายชื่อใหม่หลังลงนาม
-    setTimeout(loadEntries, 1000);
+    };
+    document.body.appendChild(script);
   }
 
   function renderEntries(entries) {
